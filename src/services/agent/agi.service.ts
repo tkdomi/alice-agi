@@ -24,9 +24,9 @@ export const setInteractionState = async (request: ChatRequest) => {
   // Create conversation if not provided
   const conversation_id = await conversationService.getOrCreate(request.conversation_id || uuidv4(), request.user.uuid);
 
-  // Load tools, categories, memories, tasks, and check fast track
-  const [tools, categories, memories, tasks] = await Promise.all([
-    toolService.getAvailableTools(),
+  // Load categories, memories, and tasks.
+  // Tools are now globally initialized by toolRegistrationService and should not be overwritten here.
+  const [categories, memories, tasks] = await Promise.all([
     categoryService.findAll(),
     memoryService.findByConversationId(conversation_id),
     taskService.findByConversationId(conversation_id),
@@ -49,14 +49,22 @@ export const setInteractionState = async (request: ChatRequest) => {
   }
 
   // Update session state with loaded data
+  // CRITICAL: Retrieve the current tools from state (initialized at startup)
+  // rather than overwriting with a limited DB-fetched list.
+  const existingTools = stateManager.getState().session.tools;
+
   stateManager.updateSession({
-    tools,
+    tools: existingTools, // Use the globally initialized tools
     categories: categories.map(({name, subcategory, description}) => ({
       category: name,
       subcategory: subcategory || '',
       description: description || ''
     })),
-    memories
+    memories: memories.map(mem => ({
+      ...mem,
+      created_at: mem.created_at || new Date().toISOString(),
+      updated_at: mem.updated_at || new Date().toISOString(),
+    }))
   });
 
   stateManager.updateConfig({

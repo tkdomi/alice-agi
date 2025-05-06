@@ -8,8 +8,9 @@ export const namingMiddleware = async (c: Context, next: Next) => {
 
     const namingConversation =
       typeof messages?.at(-1)?.content === 'string'
-        ? messages.at(-1).content.startsWith('Please name this conversation')
+        ? messages.at(-1).content.trim().startsWith('Name the following')
         : false;
+
 
     if (namingConversation) {
       return c.json({

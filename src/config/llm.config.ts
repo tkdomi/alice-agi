@@ -19,6 +19,18 @@ export const providers: Record<string, Record<string, ModelSpecs>> = {
       maxOutput: 16_384,
       knowledgeCutoff: '2023-10'
     },
+    'gpt-4.1': {
+      id: 'gpt-4.1',
+      contextWindow: 1047576,
+      maxOutput: 32768,
+      knowledgeCutoff: '2024-04'
+    },
+    'gpt-4.1-mini': {
+      id: 'gpt-4.1-mini',
+      contextWindow: 1047576,
+      maxOutput: 32768,
+      knowledgeCutoff: '2024-04'
+    },
     'o1-preview': {
       id: 'o1-preview',
       contextWindow: 128_000,

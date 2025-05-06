@@ -5,6 +5,7 @@ import web from './web';
 import memory from './memory';
 import linear from './linear';
 import text from './text';
+import cron from './cron';
 
 const tools = new Hono<AppEnv>();
 
@@ -13,5 +14,6 @@ tools.route('/web', web);
 tools.route('/memory', memory);
 tools.route('/linear', linear);
 tools.route('/text', text);
+tools.route('/cron', cron);
 
 export default tools;
