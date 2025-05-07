@@ -8,7 +8,6 @@ import {prompt as taskPrompt} from '../../prompts/agent/task';
 import {prompt as actionPrompt} from '../../prompts/agent/action';
 import {prompt as usePrompt} from '../../prompts/agent/use';
 import {CoreMessage} from 'ai';
-import {observer} from './observer.service';
 import {shouldContinueThinking, updateActionState} from './agi.service';
 import {taskService} from './task.service';
 import {actionService} from './action.service';
@@ -217,12 +216,12 @@ export const aiService = {
     const task_generation = span.generation({
       name: 'task_planning',
       input: taskMessages,
-      model: 'gpt-4.1'
+      model: state.config.model,
     });
 
     const taskPlanning = await completion.object<AgentThoughts['task']>({
       messages: taskMessages,
-      model: 'gpt-4.1',
+      model: state.config.model,
       temperature: 0,
       user: { name: state.profile.user_name ?? 'Unknown User', uuid: state.config.conversation_uuid ?? 'unknown-conversation-uuid' }
     });

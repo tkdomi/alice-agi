@@ -1,13 +1,14 @@
 import { mcpServerRegistry, McpServerConfig } from '../../config/mcp-servers.config';
 import { mcpClientService, McpToolDefinition } from '../mcp/mcp.client';
 import { stateManager } from '../agent/state.service';
-import { toolsMap as nativeToolsMap, ToolService } from '../../config/tools.config';
+import { toolsMap as nativeToolsMapConfig, ToolService } from '../../config/tools.config'; // Renamed to avoid conflict
+import { toolService as dbToolService } from '../agent/tool.service'; // Import the DB tool service
 import type { Tool } from '../../types/agent'; // Agent's internal Tool type
 import { LangfuseSpanClient, LangfuseTraceClient } from 'langfuse';
 import { v4 as uuidv4 } from 'uuid';
 
 // This will combine native tools and dynamically loaded MCP tools
-export const activeToolsMap: Record<string, ToolService> = { ...nativeToolsMap };
+export const activeToolsMap: Record<string, ToolService> = { /* Will be populated dynamically */ };
 
 class ToolRegistrationService {
   private isInitialized = false;
@@ -49,25 +50,30 @@ class ToolRegistrationService {
     if (this.isInitialized) return;
 
     const initSpan = trace?.span({ name: 'tool_registration_initialization' });
+    console.log('[ToolRegistrationService] Initializing tools...');
 
-    const currentAgentTools = stateManager.getState().session.tools || [];
-    const loadedTools: Tool[] = [...currentAgentTools]; // Start with any pre-loaded tools
+    const loadedTools: Tool[] = []; // Start with an empty array, will be populated from DB and MCP
 
-    // 1. Register Native Tools (already in state.session.tools if loaded from a static config)
-    // For now, we assume native tools are already in toolsMap and might be added to session.tools elsewhere or are implicitly known.
-    // Or, ensure they are added from nativeToolsMap if not already present:
-    for (const [toolName, service] of Object.entries(nativeToolsMap)) {
-      if (!loadedTools.find(t => t.name === toolName)) {
-        // We need a way to get description and instruction for native tools if not in a central tool definition store
-        // For this example, we'll add a placeholder. This part needs to be robust.
-        loadedTools.push({
-          uuid: uuidv4(),
-          name: toolName,
-          description: `Native tool: ${toolName}`,
-          instruction: `Refer to the ${toolName} service for payload instructions. Action name is usually derived from context or is '${toolName}'.`,
-          // category: 'native', // Optional: to distinguish tool types
-        });
+    // 1. Register Native Tools from Database
+    const nativeToolsSpan = initSpan?.span({ name: 'native_tool_registration' });
+    try {
+      const dbNativeTools = await dbToolService.getAvailableTools();
+      console.log(`[ToolRegistrationService] Found ${dbNativeTools.length} native tools from database.`);
+      for (const nativeTool of dbNativeTools) {
+        loadedTools.push(nativeTool); // nativeTool already matches Agent's Tool type
+        
+        // Wire up the executor from the static config
+        if (nativeToolsMapConfig[nativeTool.name]) {
+          activeToolsMap[nativeTool.name] = nativeToolsMapConfig[nativeTool.name];
+          console.log(`[ToolRegistrationService] Native tool '${nativeTool.name}' registered with its service.`);
+        } else {
+          console.warn(`[ToolRegistrationService] Service for native tool '${nativeTool.name}' not found in nativeToolsMapConfig.`);
+        }
       }
+      nativeToolsSpan?.end({ metadata: { success: true, count: dbNativeTools.length } });
+    } catch (error) {
+      console.error("[ToolRegistrationService] Failed to load native tools from database:", error);
+      nativeToolsSpan?.end({ metadata: { error: String(error) } });
     }
 
     // 2. Discover and Register MCP Tools
@@ -126,7 +132,7 @@ class ToolRegistrationService {
         }
         serverSpan?.end({ metadata: { success: true, tool_count: mcpTools.length } });
       } catch (error) {
-        console.error(`[ToolRegistrationService] Failed to register tools for MCP server ${serverConfig.id}:`, error);
+        console.error(`${serverLogPrefix} Failed to register tools:`, error);
         serverSpan?.end({ metadata: { error: String(error) } });
         // Continue with other servers
       }
@@ -136,7 +142,7 @@ class ToolRegistrationService {
     stateManager.updateSession({ tools: loadedTools });
     this.isInitialized = true;
     initSpan?.end();
-    console.log('[ToolRegistrationService] Tools initialized:', loadedTools.map(t => t.name));
+    console.log('[ToolRegistrationService] All tools initialized. Total registered:', loadedTools.length, 'Tools:', loadedTools.map(t => t.name));
   }
 }
 
