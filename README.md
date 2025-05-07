@@ -47,6 +47,33 @@ These are the services that are required to be set up before running the applica
 
 By default, several tools are already set up in the seed.ts and tools.config.ts files. You can use them as examples and blueprints for creating your own tools or customizing existing ones to suit your needs.
 
+### MCP Support (Tools)
+
+You can remove all "native" tools defined in `/src/database/seed.ts` and instead rely on MCP Servers, which you can add in `src/config/mcp-servers.config.ts`. If you prefer, you may include both, as the list of tools is merged and the entire flow remains the same.
+
+Here's an example of how you might configure an MCP server in `src/config/mcp-servers.config.ts`. Note that specific paths or environment variables (like `PATH` for `npx` if not globally available) might need adjustment for your own setup:
+
+```typescript
+// Example from src/config/mcp-servers.config.ts
+{
+  id: "a1b2c3d4-e5f6-7890-1234-567890abcdef", // This ID is typically a unique UUID
+  name: "Filesystem MCP",
+  transport_type: 'stdio',
+  command: "npx", // or "bunx", "pnpx", etc.
+  args: [
+    "-y", // flag to auto-confirm installation if the package isn't present
+    "@modelcontextprotocol/server-filesystem",
+    "/path/to/your/target/directory" // e.g., "/Users/username/Documents" or "C:\Users\username\Files"
+  ],
+  // env: {
+  //   // Example: If npx or the mcp server script requires specific PATH setup
+  //   // "PATH": `/custom/path/to/node/bin:${process.env.PATH || ''}`
+  // },
+  enabled: true,
+  description: "Filesystem MCP server for accessing local files in a specified directory."
+}
+```
+
 #### Task Management
 
 As you can see in the seed file, there is a need to set up `stages UUIDs` and `projects UUIDs`.
@@ -152,4 +179,4 @@ Alice AGI is available at `http://localhost:8080`. The main endpoint is `/api/ag
 
 ## License
 
-This repo is mainly for my personal use, but feel free to explore the code, get inspired by the concepts, and adapt them for your projects. Just don’t copy the entire project with its original name—I want to avoid any confusion.
+This repo is mainly for my personal use, but feel free to explore the code, get inspired by the concepts, and adapt them for your projects. Just don't copy the entire project with its original name—I want to avoid any confusion.
