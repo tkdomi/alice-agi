@@ -1,0 +1,113 @@
+name: Deploy Alice AGI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        node-version: ['20.x']
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        clean: false # As per user's reference; consider 'true' for cleaner builds
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest # Or specify a fixed version e.g., "1.1.12"
+
+    - name: Create .env file
+      run: |
+        echo "NODE_ENV=production" >> .env
+        echo "PORT=${{ secrets.PORT || '8080' }}" >> .env
+        echo "APP_URL=${{ secrets.APP_URL }}" >> .env
+        echo "API_KEY=${{ secrets.API_KEY }}" >> .env
+        echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env
+        echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> .env
+        echo "XAI_API_KEY=${{ secrets.XAI_API_KEY }}" >> .env # From .env-example
+        # Langfuse
+        echo "LANGFUSE_SECRET_KEY=${{ secrets.LANGFUSE_SECRET_KEY }}" >> .env
+        echo "LANGFUSE_PUBLIC_KEY=${{ secrets.LANGFUSE_PUBLIC_KEY }}" >> .env
+        echo "LANGFUSE_BASEURL=${{ secrets.LANGFUSE_BASEURL }}" >> .env
+        # Qdrant
+        echo "QDRANT_INDEX=${{ secrets.QDRANT_INDEX }}" >> .env
+        echo "QDRANT_URL=${{ secrets.QDRANT_URL }}" >> .env
+        echo "QDRANT_API_KEY=${{ secrets.QDRANT_API_KEY }}" >> .env
+        # Algolia
+        echo "ALGOLIA_INDEX=${{ secrets.ALGOLIA_INDEX }}" >> .env # .env-example uses ALGOLIA_INDEX, README mentions ALGOLIA_INDEX_NAME
+        echo "ALGOLIA_APP_ID=${{ secrets.ALGOLIA_APP_ID }}" >> .env
+        echo "ALGOLIA_API_KEY=${{ secrets.ALGOLIA_API_KEY }}" >> .env
+        # Google (General, OAuth, Maps, Calendar)
+        echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> .env # For Calendar OAuth primarily
+        echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" >> .env # For Calendar OAuth
+        echo "GOOGLE_REDIRECT_URI=${{ secrets.GOOGLE_REDIRECT_URI }}" >> .env # For Calendar OAuth
+        echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}" >> .env # General Google API Key from .env-example
+        echo "GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}" >> .env # Specific for Maps, from README
+        echo "GOOGLE_ACCESS_TOKEN=${{ secrets.GOOGLE_ACCESS_TOKEN }}" >> .env # OAuth related, may not be static
+        echo "GOOGLE_REFRESH_TOKEN=${{ secrets.GOOGLE_REFRESH_TOKEN }}" >> .env # OAuth related, may not be static
+        echo "GOOGLE_TOKEN_EXPIRY=${{ secrets.GOOGLE_TOKEN_EXPIRY }}" >> .env # OAuth related, may not be static
+        echo "CALENDAR_CLIENT_ID=${{ secrets.CALENDAR_CLIENT_ID }}" >> .env # Potentially distinct Google OAuth for Calendar
+        echo "CALENDAR_CLIENT_SECRET=${{ secrets.CALENDAR_CLIENT_SECRET }}" >> .env # Potentially distinct
+        # Firecrawl
+        echo "FIRECRAWL_API_KEY=${{ secrets.FIRECRAWL_API_KEY }}" >> .env
+        # ElevenLabs
+        echo "ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}" >> .env
+        # Resend
+        echo "RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}" >> .env
+        echo "FROM_EMAIL=${{ secrets.FROM_EMAIL }}" >> .env # Needed for Resend
+        # SMS (Optional, from .env-example)
+        echo "SMS_PHONE_NUMBER=${{ secrets.SMS_PHONE_NUMBER }}" >> .env
+        echo "USER_EMAIL=${{ secrets.USER_EMAIL }}" >> .env # From .env-example
+        # Linear
+        echo "LINEAR_API_KEY=${{ secrets.LINEAR_API_KEY }}" >> .env
+        echo "LINEAR_DEFAULT_TEAM_ID=${{ secrets.LINEAR_DEFAULT_TEAM_ID }}" >> .env # .env-example uses DEFAULT_TEAM_ID
+        echo "LINEAR_DEFAULT_ASSIGNEE_ID=${{ secrets.LINEAR_DEFAULT_ASSIGNEE_ID }}" >> .env
+        echo "LINEAR_WEBHOOK_SECRET=${{ secrets.LINEAR_WEBHOOK_SECRET }}" >> .env # From .env-example
+        # Spotify
+        echo "SPOTIFY_CLIENT_ID=${{ secrets.SPOTIFY_CLIENT_ID }}" >> .env
+        echo "SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET }}" >> .env
+        # Elgato Lights (Optional, from .env-example)
+        echo "ELGATO_LIGHTS_ON=${{ secrets.ELGATO_LIGHTS_ON }}" >> .env
+        echo "ELGATO_LIGHTS_OFF=${{ secrets.ELGATO_LIGHTS_OFF }}" >> .env
+        # CoinMarketCap (Optional, from .env-example)
+        echo "COIN_MARKET_CAP_API_KEY=${{ secrets.COIN_MARKET_CAP_API_KEY }}" >> .env
+
+    - name: Install dependencies
+      run: bun install --frozen-lockfile
+
+    - name: Run database migrations
+      run: bun migrate
+
+    # Optional: Seed database. Uncomment if seeding is required on each deployment and is idempotent.
+    # - name: Seed database
+    #   run: bun seed
+
+    - name: Start or restart application with PM2
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main' # Only run on push to main branch
+      run: |
+        # Ensure PM2 is installed globally on the runner (e.g., sudo bun install -g pm2 or sudo npm install -g pm2)
+        APP_NAME="alice-agi" # Define your PM2 application name
+        
+        echo "Checking if $APP_NAME is running with PM2..."
+        if pm2 list | grep -qw $APP_NAME; then
+          echo "Restarting $APP_NAME with PM2..."
+          pm2 restart $APP_NAME
+        else
+          echo "Starting $APP_NAME with PM2..."
+          # Ensure src/index.ts is your application's entry point
+          pm2 start bun --name $APP_NAME -- src/index.ts
+        fi
+      working-directory: ${{ github.workspace }} 

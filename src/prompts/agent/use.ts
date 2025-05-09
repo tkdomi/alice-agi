@@ -1,3 +1,4 @@
+import { Document } from '../../types/document';
 import type {State} from '../../types/state';
 
 export const prompt = (state: State) => {
@@ -64,7 +65,7 @@ ${
   state.session.memories.length > 0
     ? state.session.memories
         .map(memory => {
-          const relatedDocument = (state.session.documents as unknown as Array<import('../../types/document').Document>) 
+          const relatedDocument = (state.session.documents as unknown as Array<Document>) 
             .find(doc => doc.uuid === memory.document_uuid);
           return `<memory name="${memory.name}">${relatedDocument?.text || 'No content or document not found'}</memory>`;
         })
