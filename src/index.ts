@@ -24,7 +24,7 @@ console.log('app');
 app.use('*', logger());
 app.use('*', prettyJSON());
 app.use('*', cors({
-  origin: ['https://ai.overment.com', 'http://localhost:8080'],
+  origin: ['https://ai.overment.com', 'https://agi.overment.com', 'https://overment.com', 'http://localhost:8080'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization', 'X-Session-Id'],
   credentials: true,
