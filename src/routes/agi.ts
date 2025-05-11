@@ -15,19 +15,26 @@ import {actionService} from '../services/agent/action.service';
 
 export default new Hono<AppEnv>().post('/chat', async c => {
   const request = c.get('request');
+
   const conversation_id = await setInteractionState(request);
-  const trace = observer.initializeTrace(request.conversation_id || 'general');
+
+  // Ensure trace is initialized before use
+  const trace = await observer.initializeTrace(request.conversation_id || 'general');
+  if (!trace) {
+    throw new Error('Failed to initialize trace');
+  }
 
   await aiService.fastTrack(trace);
   let state = stateManager.getState();
 
   if (!state.config.fast_track) {
-    await aiService.think();
+    await aiService.think(trace);
   }
 
   state = stateManager.getState();
 
   const messages: CoreMessage[] = [{role: 'system', content: answerPrompt(state)}, ...request.messages];
+
   const final_generation = observer.startGeneration({name: 'final_answer', input: messages});
   const result = request.stream
     ? await completion.stream({...request, messages})

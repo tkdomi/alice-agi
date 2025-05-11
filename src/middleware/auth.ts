@@ -32,7 +32,7 @@ export const authMiddleware = () => {
 
     const supported_models = Object.values(providers)
       .flatMap(provider => Object.keys(provider));
-    const default_model = 'gpt-4o';
+    const default_model = 'gpt-4.1';
     const requested_model = is_multipart ? default_model : request_body.model;
     const validated_model = supported_models.includes(requested_model) ? requested_model : default_model;
 

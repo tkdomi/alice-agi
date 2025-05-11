@@ -1,6 +1,7 @@
+import { Document } from '../../types/document';
 import type {State} from '../../types/state';
 
-export const prompt = (state: State, toolContext?: IDoc) => {
+export const prompt = (state: State) => {
   const task = state.interaction.tasks.find(t => t.uuid === state.config.current_task?.uuid);
   const action = task?.actions.find(a => a.uuid === state.config.current_action?.uuid);
   const tool = state.session.tools.find(t => t.uuid === action?.tool_uuid);
@@ -63,7 +64,11 @@ ${state.profile.ai_name}: {
 ${
   state.session.memories.length > 0
     ? state.session.memories
-        .map(memory => `<memory name="${memory.name}">${memory.document?.text || 'No content'}</memory>`)
+        .map(memory => {
+          const relatedDocument = (state.session.documents as unknown as Array<Document>) 
+            .find(doc => doc.uuid === memory.document_uuid);
+          return `<memory name="${memory.name}">${relatedDocument?.text || 'No content or document not found'}</memory>`;
+        })
         .join('\n')
     : 'No memories recalled'
 }

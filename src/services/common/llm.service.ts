@@ -8,7 +8,7 @@ import {tempFile} from './upload.service';
 import {providers} from '../../config/llm.config';
 import {anthropic} from '@ai-sdk/anthropic';
 
-const createBaseConfig = ({model = 'gpt-4o', messages, temperature = 0.7, max_tokens = 16384, user}: CompletionConfig) => {
+const createBaseConfig = ({model = 'gpt-4.1', messages, temperature = 0.7, max_tokens = 16384, user}: CompletionConfig) => {
   const provider = Object.entries(providers).find(([_, models]) => 
     Object.keys(models).includes(model)
   )?.[0] ?? 'openai';

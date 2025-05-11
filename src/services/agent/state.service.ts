@@ -67,8 +67,8 @@ const createStateManager = () => {
       current_action: null,
       user_uuid: null,
       conversation_uuid: null,
-      model: 'gpt-4o-mini',
-      alt_model: 'gpt-4o-mini',
+      model: 'gpt-4.1',
+      alt_model: 'gpt-4.1-mini',
       temperature: 0.7,
       max_tokens: 16384,
       time: new Date().toISOString()

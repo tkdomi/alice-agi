@@ -40,7 +40,7 @@ const createObserver = () => {
   };
 
   return {
-    initializeTrace: (name: string) => {
+    initializeTrace: async (name: string) => {
       const state = stateManager.getState();
 
       observer.trace = langfuse.trace({
@@ -53,6 +53,13 @@ const createObserver = () => {
           user_name: state.profile.user_name
         }
       });
+
+      // Wait for trace to be ready
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      if (!observer.trace) {
+        throw new Error('Failed to initialize trace');
+      }
 
       return observer.trace;
     },

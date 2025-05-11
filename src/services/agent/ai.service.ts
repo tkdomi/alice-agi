@@ -8,7 +8,6 @@ import {prompt as taskPrompt} from '../../prompts/agent/task';
 import {prompt as actionPrompt} from '../../prompts/agent/action';
 import {prompt as usePrompt} from '../../prompts/agent/use';
 import {CoreMessage} from 'ai';
-import {observer} from './observer.service';
 import {shouldContinueThinking, updateActionState} from './agi.service';
 import {taskService} from './task.service';
 import {actionService} from './action.service';
@@ -18,7 +17,7 @@ import {LangfuseSpanClient, LangfuseTraceClient} from 'langfuse';
 import {prompt as fastTrackPrompt} from '../../prompts/agent/fast';
 import { linearService } from '../tools/linear.service';
 import { calendarService } from './calendar.service';
-import { toolsMap } from '../../config/tools.config';
+import { activeToolsMap } from './tool.registration.service';
 import { memoryService } from './memory.service';
 
 export const aiService = {
@@ -44,7 +43,7 @@ export const aiService = {
       messages: fastTrackMessages,
       model: stateManager.getState().config.model,
       temperature: 0,
-      user: stateManager.getState().profile
+      user: { name: stateManager.getState().profile.user_name ?? 'Unknown User', uuid: stateManager.getState().config.conversation_uuid ?? 'unknown-conversation-uuid' }
     });
 
     fastTrackGeneration.end({output: fastTrack});
@@ -54,19 +53,33 @@ export const aiService = {
     return fastTrack?.result || false;
   },
 
-  think: async () => {
-    const observingSpan = observer.startSpan('observing', {
-      phase: 'observation_and_drafting'
+  think: async (trace: LangfuseTraceClient) => {
+    if (!trace) {
+      throw new Error('Trace must be provided to think()');
+    }
+
+    const observingSpan = trace.span({
+      name: 'observing',
+      metadata: {
+        phase: 'observation_and_drafting',
+        ...stateManager.getState().config,
+        timestamp: new Date().toISOString()
+      }
     });
 
     await aiService.observe(observingSpan);
     await aiService.draft(observingSpan);
 
-    observer.endSpan(observingSpan.id);
+    observingSpan.end();
 
     while (shouldContinueThinking()) {
-      const thinkingSpan = observer.startSpan(`thinking #${stateManager.getState().config.step}`, {
-        phase: 'reasoning_loop'
+      const thinkingSpan = trace.span({
+        name: `thinking #${stateManager.getState().config.step}`,
+        metadata: {
+          phase: 'reasoning_loop',
+          ...stateManager.getState().config,
+          timestamp: new Date().toISOString()
+        }
       });
 
       await aiService.plan(thinkingSpan);
@@ -84,7 +97,7 @@ export const aiService = {
         step: stateManager.getState().config.step + 1
       });
 
-      observer.endSpan(thinkingSpan.id);
+      thinkingSpan.end();
     }
   },
 
@@ -119,13 +132,13 @@ export const aiService = {
         messages: environmentMessages,
         model: state.config.alt_model ?? state.config.model,
         temperature: 0,
-        user: state.profile
+        user: { name: state.profile.user_name ?? 'Unknown User', uuid: state.config.conversation_uuid ?? 'unknown-conversation-uuid' }
       }),
       completion.object<AgentThoughts['context']>({
         messages: generalContextMessages,
         model: state.config.alt_model ?? state.config.model,
         temperature: 0,
-        user: state.profile
+        user: { name: state.profile.user_name ?? 'Unknown User', uuid: state.config.conversation_uuid ?? 'unknown-conversation-uuid' }
       })
     ]);
 
@@ -170,13 +183,13 @@ export const aiService = {
         messages: toolsMessages,
         model: state.config.alt_model ?? state.config.model,
         temperature: 0,
-        user: state.profile
+        user: { name: state.profile.user_name ?? 'Unknown User', uuid: state.config.conversation_uuid ?? 'unknown-conversation-uuid' }
       }),
       completion.object<AgentThoughts['memory']>({
         messages: memoryMessages,
         model: state.config.alt_model ?? state.config.model,
         temperature: 0,
-        user: state.profile
+        user: { name: state.profile.user_name ?? 'Unknown User', uuid: state.config.conversation_uuid ?? 'unknown-conversation-uuid' }
       })
     ]);
 
@@ -203,14 +216,14 @@ export const aiService = {
     const task_generation = span.generation({
       name: 'task_planning',
       input: taskMessages,
-      model: 'gpt-4o'
+      model: state.config.model,
     });
 
     const taskPlanning = await completion.object<AgentThoughts['task']>({
       messages: taskMessages,
-      model: 'gpt-4o',
+      model: state.config.model,
       temperature: 0,
-      user: state.profile
+      user: { name: state.profile.user_name ?? 'Unknown User', uuid: state.config.conversation_uuid ?? 'unknown-conversation-uuid' }
     });
 
     const persisted_tasks = await taskService.createTasks(state.config.conversation_uuid!, taskPlanning?.result ?? []);
@@ -239,6 +252,16 @@ export const aiService = {
       model: state.config.model
     });
 
+    interface CompletionUser {
+      uuid: string;
+      name: string;
+    }
+
+    const currentUser: CompletionUser = {
+      name: state.profile.user_name ?? 'Unknown User',
+      uuid: state.config.conversation_uuid ?? crypto.randomUUID()
+    };
+
     const actionPlanning = await completion.object<{
       _thinking: string;
       result: {
@@ -250,7 +273,7 @@ export const aiService = {
       messages: actionMessages,
       model: state.config.model,
       temperature: 0,
-      user: state.profile
+      user: currentUser
     });
 
     if (!actionPlanning?.result) {
@@ -352,7 +375,7 @@ export const aiService = {
       messages: useMessages,
       model: state.config.model,
       temperature: 0,
-      user: state.profile
+      user: { name: state.profile.user_name ?? 'Unknown User', uuid: state.config.conversation_uuid ?? 'unknown-conversation-uuid' }
     });
 
     if (!toolUse?.result) {
@@ -388,19 +411,23 @@ export const aiService = {
 
   act: async ({action, payload}: ToolUsePayload, span: LangfuseSpanClient) => {
     const state = stateManager.getState();
-    const current_tool = state.config.current_tool;
+    const current_tool_config = state.config.current_tool;
 
-    const tool = toolsMap[current_tool?.name ?? 'unknown'];
-    if (!tool) {
-      await span.end({
-        error: `Tool ${current_tool?.name} not found`,
-        status: 'error'
-      });
-      throw new Error(`Tool ${current_tool?.name} not found`);
+    if (!current_tool_config?.name) {
+      const errorMsg = 'Current tool name not found in state config.';
+      span.update({ metadata: { error: errorMsg } });
+      throw new Error(errorMsg);
+    }
+
+    const toolService = activeToolsMap[current_tool_config.name];
+    if (!toolService) {
+      const errorMsg = `Tool service for '${current_tool_config.name}' not found in activeToolsMap.`;
+      span.update({ metadata: { error: errorMsg } });
+      throw new Error(errorMsg);
     }
 
     try {
-      const result = await tool.execute(action, {...payload, conversation_uuid: state.config.conversation_uuid}, span);
+      const result = await toolService.execute(action, {...payload, conversation_uuid: state.config.conversation_uuid}, span);
 
       if (state.config.current_action?.uuid) {
         await updateActionState({
@@ -410,11 +437,11 @@ export const aiService = {
       }
 
       await span.event({
-        name: `${current_tool?.name.toLowerCase()}_execution_complete`,
+        name: `${current_tool_config?.name.split('/').pop()?.toLowerCase()}_execution_complete`,
         input: {action, payload},
         output: result,
         metadata: {
-          tool: current_tool?.name,
+          tool: current_tool_config?.name,
           action,
           payload,
           result

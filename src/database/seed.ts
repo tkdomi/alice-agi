@@ -226,7 +226,7 @@ Notes:
   {
     uuid: '945b84e9-05e7-48d8-b9ba-104785a7eed4',
     name: 'memory',
-    description: 'Use this to search, create, update, or delete memories. Memories are organized by categories and can be recalled based on context.',
+    description: 'Use this to search, create, update, or delete memories. Memories are organized by categories and can be recalled based on context. Memories are things that Alice knows about herself, the user and their world. Keep in mind that calendar events and tasks are not memories as they are stored in external services.',
     instruction: `Available actions:
 
 1. RECALL MEMORIES

@@ -5,7 +5,6 @@ import {stateManager} from '../agent/state.service';
 import {TokenResponse, SimplifiedSearchResults} from '../../types/tools/spotify';
 import {prompt as spotifyPlayPrompt} from '../../prompts/tools/spotify.play';
 import {completion} from '../common/llm.service';
-import {CoreMessage} from 'ai';
 import {DocumentMetadata} from '../../types/document';
 import {documentService} from '../agent/document.service';
 import type {DocumentType} from '../agent/document.service';

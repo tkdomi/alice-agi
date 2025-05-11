@@ -1,7 +1,7 @@
 import db from '../../database/db';
 import {conversations, type NewConversation} from '../../schema/conversation';
 import {v4 as uuidv4} from 'uuid';
-import {eq, desc} from 'drizzle-orm';
+import {eq, desc, gte, and, sql} from 'drizzle-orm';
 import {messages} from '../../schema/message';
 
 interface CreateConversationParams {
@@ -74,7 +74,12 @@ export const conversationService = {
       const conversations_list = await db
         .select()
         .from(conversations)
-        .where(eq(conversations.user_id, user_id))
+        .where(
+          and(
+            eq(conversations.user_id, user_id),
+            gte(conversations.created_at, sql`datetime('now', '-15 minutes')`)
+          )
+        )
         .orderBy(desc(conversations.created_at))
         .limit(limit);
 

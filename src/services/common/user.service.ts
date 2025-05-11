@@ -19,7 +19,6 @@ export const findByToken = async (token: string): Promise<User | undefined> => {
       .where(eq(users.token, token))
       .limit(1);
 
-    console.log('Database query result:', user); // Debug log
     return user;
   } catch (error) {
     console.error('Error finding user by token:', error); // Error log
